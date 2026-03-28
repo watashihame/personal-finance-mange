@@ -158,4 +158,4 @@ ALTER TABLE holdings ADD COLUMN tags VARCHAR(200) DEFAULT '';
 
 ## License
 
-MIT
+Copyright (c) 2026 watashihame. Released under the [MIT License](LICENSE).

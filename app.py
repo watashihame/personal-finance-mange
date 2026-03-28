@@ -328,6 +328,139 @@ def api_portfolio_data():
     return jsonify({"labels": labels, "values": values, "colors": colors})
 
 
+@app.route("/api/holdings/search")
+def api_holdings_search():
+    q = request.args.get("q", "").strip().lower()
+    session = get_session()
+    try:
+        holdings = session.execute(select(Holding)).scalars().all()
+        results = []
+        for h in holdings:
+            if not q or q in h.name.lower() or q in h.symbol.lower():
+                tag_list = [t.strip() for t in (h.tags or "").split(",") if t.strip()]
+                results.append({
+                    "id": h.id,
+                    "name": h.name,
+                    "symbol": h.symbol,
+                    "market": h.market,
+                    "quantity": h.quantity,
+                    "tags": tag_list,
+                })
+        return jsonify(results)
+    finally:
+        session.close()
+
+
+@app.route("/api/holdings", methods=["POST"])
+def api_holding_add():
+    data = request.get_json(force=True)
+    required = ["name", "symbol", "market", "asset_type", "currency", "quantity", "cost_price"]
+    for field in required:
+        if field not in data:
+            return jsonify({"error": f"缺少必填字段: {field}"}), 400
+    try:
+        quantity = float(data["quantity"])
+        cost_price = float(data["cost_price"])
+    except (TypeError, ValueError):
+        return jsonify({"error": "quantity 和 cost_price 必须为数字"}), 400
+    if quantity <= 0 or cost_price <= 0:
+        return jsonify({"error": "quantity 和 cost_price 必须大于 0"}), 400
+
+    market = str(data["market"]).upper()
+    asset_type = str(data["asset_type"]).lower()
+    currency = str(data["currency"]).upper()
+    if market not in MARKETS:
+        return jsonify({"error": f"market 无效，可选值: {MARKETS}"}), 400
+    if asset_type not in ASSET_TYPES:
+        return jsonify({"error": f"asset_type 无效，可选值: {ASSET_TYPES}"}), 400
+    if currency not in CURRENCIES:
+        return jsonify({"error": f"currency 无效，可选值: {CURRENCIES}"}), 400
+
+    raw_tags = data.get("tags", "")
+    if isinstance(raw_tags, list):
+        raw_tags = ",".join(raw_tags)
+    tags = ",".join(t.strip() for t in raw_tags.split(",") if t.strip())
+
+    h = Holding(
+        name=str(data["name"]).strip(),
+        symbol=str(data["symbol"]).strip().upper(),
+        market=market,
+        asset_type=asset_type,
+        currency=currency,
+        quantity=quantity,
+        cost_price=cost_price,
+        tags=tags,
+        notes=str(data.get("notes", "")).strip(),
+    )
+    session = get_session()
+    try:
+        session.add(h)
+        session.commit()
+        return jsonify({"ok": True, "id": h.id, "name": h.name, "symbol": h.symbol})
+    finally:
+        session.close()
+
+
+@app.route("/api/holdings/<int:holding_id>/quantity", methods=["PATCH"])
+def api_holding_quantity(holding_id: int):
+    data = request.get_json(force=True)
+    session = get_session()
+    try:
+        h = session.get(Holding, holding_id)
+        if h is None:
+            return jsonify({"error": "持仓不存在"}), 404
+
+        if "quantity" in data:
+            try:
+                new_qty = float(data["quantity"])
+            except (TypeError, ValueError):
+                return jsonify({"error": "quantity 必须为数字"}), 400
+        elif "delta" in data:
+            try:
+                new_qty = h.quantity + float(data["delta"])
+            except (TypeError, ValueError):
+                return jsonify({"error": "delta 必须为数字"}), 400
+        else:
+            return jsonify({"error": "请提供 quantity 或 delta"}), 400
+
+        if new_qty <= 0:
+            return jsonify({"error": "修改后的持有量必须大于 0"}), 400
+
+        h.quantity = new_qty
+        h.updated_at = datetime.now(timezone.utc)
+        session.commit()
+        return jsonify({"ok": True, "id": h.id, "symbol": h.symbol, "quantity": h.quantity})
+    finally:
+        session.close()
+
+
+@app.route("/api/holdings/<int:holding_id>/tags", methods=["PATCH"])
+def api_holding_tags(holding_id: int):
+    data = request.get_json(force=True)
+    if "tags" not in data:
+        return jsonify({"error": "缺少 tags 字段"}), 400
+
+    raw_tags = data["tags"]
+    if isinstance(raw_tags, list):
+        raw_tags = ",".join(str(t) for t in raw_tags)
+    elif not isinstance(raw_tags, str):
+        return jsonify({"error": "tags 必须为字符串或数组"}), 400
+
+    tag_list = [t.strip() for t in raw_tags.split(",") if t.strip()]
+
+    session = get_session()
+    try:
+        h = session.get(Holding, holding_id)
+        if h is None:
+            return jsonify({"error": "持仓不存在"}), 404
+        h.tags = ",".join(tag_list)
+        h.updated_at = datetime.now(timezone.utc)
+        session.commit()
+        return jsonify({"ok": True, "id": h.id, "symbol": h.symbol, "tags": tag_list})
+    finally:
+        session.close()
+
+
 # ---------------------------------------------------------------------------
 # Template filters
 # ---------------------------------------------------------------------------

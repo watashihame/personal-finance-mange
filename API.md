@@ -1,6 +1,6 @@
 # API 说明文档
 
-本应用提供一组 JSON API 端点，用于价格管理和图表数据获取，可供前端页面或外部脚本调用。
+本应用提供一组 JSON API 端点，用于持仓管理、价格管理和图表数据获取，可供前端页面或外部脚本调用。
 
 **Base URL：** `http://<host>/api`
 
@@ -8,10 +8,14 @@
 
 ## 目录
 
-- [刷新行情价格](#1-刷新行情价格)
-- [手动设置价格](#2-手动设置价格)
-- [清除手动价格](#3-清除手动价格)
-- [获取图表数据](#4-获取图表数据)
+- [模糊查询持仓](#1-模糊查询持仓)
+- [新增持仓](#2-新增持仓)
+- [修改持仓份数](#3-修改持仓份数)
+- [修改持仓标签](#4-修改持仓标签)
+- [刷新行情价格](#5-刷新行情价格)
+- [手动设置价格](#6-手动设置价格)
+- [清除手动价格](#7-清除手动价格)
+- [获取图表数据](#8-获取图表数据)
 
 ---
 
@@ -44,7 +48,226 @@
 
 ---
 
-## 1. 刷新行情价格
+## 1. 模糊查询持仓
+
+按名称或代码关键词搜索持仓，返回匹配项及其 ID。常用于先查找 ID，再调用修改接口。
+
+```
+GET /api/holdings/search?q=<关键词>
+```
+
+**查询参数：**
+
+| 参数 | 必填 | 说明 |
+|------|------|------|
+| `q` | 否 | 搜索关键词，大小写不敏感，匹配 `name` 或 `symbol` 的包含关系；不传或为空时返回全部持仓 |
+
+**响应示例：**
+
+```json
+[
+  {
+    "id": 1,
+    "name": "Apple Inc.",
+    "symbol": "AAPL",
+    "market": "US",
+    "quantity": 10.0,
+    "tags": ["科技", "长期持有"]
+  }
+]
+```
+
+**响应字段：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | integer | 持仓 ID，用于后续修改接口 |
+| `name` | string | 资产名称 |
+| `symbol` | string | 标的代码 |
+| `market` | string | 市场 |
+| `quantity` | number | 持有量 |
+| `tags` | string[] | 标签列表 |
+
+无匹配时返回空数组 `[]`。
+
+**调用示例：**
+```bash
+# 搜索包含 "apple" 的持仓
+curl "http://localhost/api/holdings/search?q=apple"
+
+# 返回全部持仓
+curl "http://localhost/api/holdings/search"
+```
+
+---
+
+## 2. 新增持仓
+
+通过 API 创建一条新的持仓记录，等同于在 Web 表单中点击"添加持仓"。
+
+```
+POST /api/holdings
+Content-Type: application/json
+```
+
+**请求体：**
+
+```json
+{
+  "name": "Apple Inc.",
+  "symbol": "AAPL",
+  "market": "US",
+  "asset_type": "stock",
+  "currency": "USD",
+  "quantity": 10.0,
+  "cost_price": 175.0,
+  "tags": "科技,长期持有",
+  "notes": ""
+}
+```
+
+**请求字段：**
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `name` | string | 是 | 资产名称 |
+| `symbol` | string | 是 | 标的代码，自动转大写 |
+| `market` | string | 是 | 市场，枚举值见上方 |
+| `asset_type` | string | 是 | 资产类型，枚举值见上方 |
+| `currency` | string | 是 | 货币，枚举值见上方 |
+| `quantity` | number | 是 | 持有量，必须 > 0 |
+| `cost_price` | number | 是 | 成本价，必须 > 0 |
+| `tags` | string | 否 | 标签，逗号分隔；也可传字符串数组 |
+| `notes` | string | 否 | 备注 |
+
+**响应示例（成功）：**
+
+```json
+{"ok": true, "id": 5, "name": "Apple Inc.", "symbol": "AAPL"}
+```
+
+**HTTP 状态码：**
+
+| 状态码 | 含义 |
+|--------|------|
+| 200 | 创建成功 |
+| 400 | 参数错误（缺少必填字段、枚举值无效、数量非正等） |
+
+**调用示例：**
+```bash
+curl -X POST http://localhost/api/holdings \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Apple Inc.","symbol":"AAPL","market":"US","asset_type":"stock","currency":"USD","quantity":10,"cost_price":175}'
+```
+
+---
+
+## 3. 修改持仓份数
+
+修改指定持仓的持有量，支持直接设置或增量调整两种模式。
+
+```
+PATCH /api/holdings/<id>/quantity
+Content-Type: application/json
+```
+
+**请求体（直接设置）：**
+
+```json
+{"quantity": 20.0}
+```
+
+**请求体（增量调整）：**
+
+```json
+{"delta": -5.0}
+```
+
+**请求字段：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `quantity` | number | 直接设置新的持有量，必须 > 0 |
+| `delta` | number | 在当前持有量基础上加减，结果必须 > 0 |
+
+`quantity` 和 `delta` 二选一，同时传入时以 `quantity` 为准。
+
+**响应示例（成功）：**
+
+```json
+{"ok": true, "id": 1, "symbol": "AAPL", "quantity": 15.0}
+```
+
+**HTTP 状态码：**
+
+| 状态码 | 含义 |
+|--------|------|
+| 200 | 修改成功 |
+| 400 | 参数错误或修改后数量 ≤ 0 |
+| 404 | 持仓不存在 |
+
+**调用示例：**
+```bash
+# 直接设置为 20 股
+curl -X PATCH http://localhost/api/holdings/1/quantity \
+  -H "Content-Type: application/json" \
+  -d '{"quantity": 20}'
+
+# 卖出 5 股（增量）
+curl -X PATCH http://localhost/api/holdings/1/quantity \
+  -H "Content-Type: application/json" \
+  -d '{"delta": -5}'
+```
+
+---
+
+## 4. 修改持仓标签
+
+替换指定持仓的标签列表。
+
+```
+PATCH /api/holdings/<id>/tags
+Content-Type: application/json
+```
+
+**请求体（字符串格式）：**
+
+```json
+{"tags": "科技,长期持有,核心仓位"}
+```
+
+**请求体（数组格式）：**
+
+```json
+{"tags": ["科技", "长期持有", "核心仓位"]}
+```
+
+**响应示例（成功）：**
+
+```json
+{"ok": true, "id": 1, "symbol": "AAPL", "tags": ["科技", "长期持有", "核心仓位"]}
+```
+
+传入空字符串 `""` 或空数组 `[]` 可清空所有标签。
+
+**HTTP 状态码：**
+
+| 状态码 | 含义 |
+|--------|------|
+| 200 | 修改成功 |
+| 400 | 缺少 `tags` 字段或格式无效 |
+| 404 | 持仓不存在 |
+
+**调用示例：**
+```bash
+curl -X PATCH http://localhost/api/holdings/1/tags \
+  -H "Content-Type: application/json" \
+  -d '{"tags": ["科技", "长期持有"]}'
+```
+
+---
+
+## 5. 刷新行情价格
 
 触发所有持仓的行情抓取，同时更新汇率缓存。标记为"手动价格"的持仓不会被覆盖。
 
@@ -87,7 +310,7 @@ POST /api/refresh-prices
 
 ---
 
-## 2. 手动设置价格
+## 6. 手动设置价格
 
 为指定标的设置一个手动价格。设置后，该标的将跳过自动行情抓取，直到调用"清除手动价格"接口。
 
@@ -141,7 +364,7 @@ Content-Type: application/json
 
 ---
 
-## 3. 清除手动价格
+## 7. 清除手动价格
 
 取消指定标的的手动价格覆盖，恢复自动行情抓取。
 
@@ -190,7 +413,7 @@ Content-Type: application/json
 
 ---
 
-## 4. 获取图表数据
+## 8. 获取图表数据
 
 返回当前持仓的市值分布数据，按市值从高到低排序，供 Chart.js 饼图和柱状图使用。
 

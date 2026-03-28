@@ -143,6 +143,10 @@ ALTER TABLE holdings ADD COLUMN tags VARCHAR(200) DEFAULT '';
 
 | 端点 | 方法 | 说明 |
 |------|------|------|
+| `/api/holdings/search` | GET | 按名称/代码模糊查询持仓 |
+| `/api/holdings` | POST | 新增持仓 |
+| `/api/holdings/<id>/quantity` | PATCH | 修改持仓份数（支持直接设置或增量） |
+| `/api/holdings/<id>/tags` | PATCH | 修改持仓标签 |
 | `/api/refresh-prices` | POST | 刷新所有持仓行情 |
 | `/api/override-price` | POST | 手动设置价格 |
 | `/api/clear-override` | POST | 清除手动价格 |

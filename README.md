@@ -152,6 +152,116 @@ ALTER TABLE holdings ADD COLUMN tags VARCHAR(200) DEFAULT '';
 | `/api/clear-override` | POST | 清除手动价格 |
 | `/api/portfolio-data` | GET | 获取图表数据（JSON） |
 
+## MCP Server（AI 集成）
+
+通过 [Model Context Protocol (MCP)](https://modelcontextprotocol.io) 将持仓数据和操作暴露给 AI 助手，无需打开浏览器即可让 AI 直接查询、分析和修改投资组合。
+
+支持两种传输模式：
+- **stdio** — 本地进程模式，供 Claude Code / Claude Desktop 使用
+- **streamable-http** — HTTP 服务模式，供其他服务器上的 Agent（如 OpenClaw）通过网络访问
+
+### 安装依赖
+
+```bash
+pip install "mcp[cli]>=1.26.0"
+```
+
+### 模式一：本地 stdio（Claude Code / Claude Desktop）
+
+```bash
+# SQLite（本地开发）
+DATABASE_URL=sqlite:///portfolio.db python mcp_server.py
+
+# PostgreSQL
+DATABASE_URL=postgresql://portfolio:PASSWORD@localhost:5432/portfolio python mcp_server.py
+```
+
+**配置 Claude Code** — 项目根目录已包含 `.mcp.json`，在此目录打开 Claude Code 后会自动加载。如需修改：
+
+```json
+{
+  "mcpServers": {
+    "portfolio-tracker": {
+      "command": "python",
+      "args": ["/root/personal-finance/mcp_server.py"],
+      "env": {
+        "DATABASE_URL": "sqlite:////root/personal-finance/portfolio.db"
+      }
+    }
+  }
+}
+```
+
+**配置 Claude Desktop** — 编辑 `~/Library/Application Support/Claude/claude_desktop_config.json`（macOS）或 `%APPDATA%\Claude\claude_desktop_config.json`（Windows），添加同样的 `mcpServers` 配置。
+
+### 模式二：HTTP 远程访问（跨服务器 Agent）
+
+在服务器上以 `streamable-http` 模式启动：
+
+```bash
+TRANSPORT=streamable-http MCP_HOST=0.0.0.0 MCP_PORT=8000 \
+  DATABASE_URL=postgresql://portfolio:PASSWORD@localhost:5432/portfolio \
+  python mcp_server.py
+```
+
+MCP 端点地址（直连，不经 Nginx）：`http://<服务器IP>:8000/mcp`
+
+**Docker Compose 一键启动**（推荐）：
+
+```bash
+docker compose up -d
+```
+
+所有流量统一走 **80 端口**，由 Nginx 路由：
+
+| 路径 | 说明 |
+|------|------|
+| `http://<服务器IP>/` | Web 界面（Flask） |
+| `http://<服务器IP>/api/...` | REST API |
+| `http://<服务器IP>/mcp` | MCP streamable-http 端点 |
+
+**远程 Agent 连接配置示例**（以支持 MCP streamable-http 的 Agent 框架为例）：
+
+```json
+{
+  "mcpServers": {
+    "portfolio-tracker": {
+      "url": "http://<服务器IP>/mcp"
+    }
+  }
+}
+```
+
+> **注意：** 远程模式下建议通过防火墙规则或 Nginx 反向代理限制访问来源，避免 MCP 端口暴露在公网。
+
+### 可用 Tools
+
+| Tool | 说明 |
+|------|------|
+| `get_portfolio_summary` | 获取完整持仓汇总（总市值/成本/盈亏 + 各持仓明细） |
+| `search_holdings` | 按名称或代码搜索持仓，空字符串返回全部 |
+| `get_exchange_rates` | 查看当前缓存汇率（USD/JPY/HKD 等对 CNY） |
+| `add_holding` | 新增持仓 |
+| `update_holding_quantity` | 更新持仓数量（支持绝对值或增量） |
+| `update_holding_tags` | 更新持仓标签 |
+| `delete_holding` | 删除持仓（需传 `confirm=true`） |
+| `refresh_prices` | 从 Tushare/yfinance 刷新全部行情和汇率 |
+| `set_price_override` | 手动设置某标的价格 |
+| `clear_price_override` | 清除手动价格，恢复自动抓取 |
+
+### 示例对话
+
+加载 MCP Server 后，可以直接用自然语言操作：
+
+```
+"帮我查看当前持仓组合，哪些持仓亏损超过 10%？"
+"把 AAPL 的持仓数量增加 10 股"
+"为我的所有 A 股持仓打上 '长期持有' 标签"
+"刷新所有行情，然后告诉我今日盈亏"
+```
+
+---
+
 ## 技术栈
 
 - **后端** — Python 3.12, Flask 3.1, SQLAlchemy 2.0, Gunicorn
@@ -159,6 +269,7 @@ ALTER TABLE holdings ADD COLUMN tags VARCHAR(200) DEFAULT '';
 - **行情** — [Tushare Pro](https://tushare.pro)（A 股）, [yfinance](https://github.com/ranaroussi/yfinance)（美股/日股/加密）
 - **前端** — Jinja2 模板, Bootstrap 5.3, Chart.js 4
 - **部署** — Docker, Docker Compose, Nginx
+- **AI 集成** — [MCP](https://modelcontextprotocol.io) `mcp[cli]` SDK（stdio transport，供 Claude Desktop / Claude Code 使用）
 
 ## License
 

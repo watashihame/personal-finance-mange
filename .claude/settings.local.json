@@ -9,7 +9,13 @@
       "Bash(python3 -c \"import flask; print\\(flask.__version__\\)\")",
       "Bash(python3 -c \"import yfinance; print\\(yfinance.__version__\\)\")",
       "Bash(python3 -c \"import akshare; print\\(akshare.__version__\\)\")",
-      "Bash(python3 -c \"import sqlalchemy; print\\(sqlalchemy.__version__\\)\")"
+      "Bash(python3 -c \"import sqlalchemy; print\\(sqlalchemy.__version__\\)\")",
+      "Bash(ls -la /root/personal-finance/.env*)",
+      "Bash(docker compose run --rm mcp python -c \":*)",
+      "Bash(docker compose:*)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost/mcp)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" -X POST http://localhost/mcp -H \"Content-Type: application/json\" -d '{\"\"jsonrpc\"\":\"\"2.0\"\",\"\"method\"\":\"\"initialize\"\",\"\"id\"\":1}')",
+      "Bash(curl -s -w \"\\\\nHTTP: %{http_code}\\\\n\" -X POST http://localhost/mcp -H \"Content-Type: application/json\" -H \"Accept: application/json, text/event-stream\" -d '{\"\"jsonrpc\"\":\"\"2.0\"\",\"\"method\"\":\"\"initialize\"\",\"\"params\"\":{\"\"protocolVersion\"\":\"\"2024-11-05\"\",\"\"capabilities\"\":{},\"\"clientInfo\"\":{\"\"name\"\":\"\"test\"\",\"\"version\"\":\"\"1.0\"\"}},\"\"id\"\":1}')"
     ]
   }
 }

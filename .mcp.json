@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "portfolio-tracker": {
+      "command": "/root/miniconda3/envs/pf/bin/python",
+      "args": ["/root/personal-finance/mcp_server.py"],
+      "env": {
+        "DATABASE_URL": "sqlite:////root/personal-finance/portfolio.db"
+      }
+    }
+  }
+}

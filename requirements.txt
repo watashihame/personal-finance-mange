@@ -5,3 +5,4 @@ yfinance==0.2.54
 tushare
 requests==2.32.3
 gunicorn==23.0.0
+mcp[cli]>=1.26.0

@@ -39,6 +39,21 @@ services:
       - static_files:/app/static:ro
     depends_on:
       - web
+      - mcp
+
+  mcp:
+    build: .
+    restart: unless-stopped
+    command: python mcp_server.py
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-portfolio}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-portfolio}
+      TUSHARE_TOKEN: ${TUSHARE_TOKEN:-}
+      TRANSPORT: streamable-http
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: "8000"
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   postgres_data:
